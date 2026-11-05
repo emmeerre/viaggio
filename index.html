@@ -1,0 +1,1849 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="origin">
+    <title>Creatore di Viaggi Pro</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Librerie per generare la GIF (html2canvas + gif.js) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #333;
+        }
+        
+        /* Barra laterale ottimizzata per dare massimo spazio alle tappe */
+        #sidebar {
+            width: 440px;
+            background: #f8f9fa;
+            padding: 10px 12px;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.15);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            box-sizing: border-box;
+            flex-shrink: 0;
+        }
+
+        /* Modalità Cinema: nasconde barra laterale, tasti zoom +/- e scritte mappa */
+        body.cinema-mode #sidebar {
+            display: none !important;
+        }
+        body.cinema-mode .leaflet-control-zoom,
+        body.cinema-mode .leaflet-control-attribution {
+            display: none !important;
+        }
+        body.cinema-mode #map {
+            cursor: none;
+        }
+
+        /* Intestazione compatta + bottone Help */
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        h2 {
+            margin: 0;
+            font-size: 1.1rem;
+            color: #2c3e50;
+        }
+
+        #btn-help {
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 4px 9px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            flex: 0;
+            white-space: nowrap;
+        }
+
+        /* Box Help collassabile (nascosto di default) */
+        #help-box {
+            display: none;
+            font-size: 0.74rem;
+            color: #444;
+            margin-bottom: 8px;
+            background: #e2e6ea;
+            padding: 8px 10px;
+            border-radius: 5px;
+            line-height: 1.35;
+            border-left: 3px solid #6c757d;
+        }
+
+        /* Pulsanti principali compatti */
+        .controls {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 5px;
+        }
+
+        button {
+            padding: 6px 8px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            flex: 1;
+            transition: opacity 0.15s;
+            font-size: 0.78rem;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        button:hover:not(:disabled) {
+            opacity: 0.9;
+        }
+
+        #btn-play { background: #28a745; color: white; }
+        #btn-cinema { background: #e83e8c; color: white; flex: 1.4; }
+        #btn-reset { background: #ffc107; color: #212529; flex: 0.7; }
+        #btn-clear { background: #dc3545; color: white; flex: 0.7; }
+        #btn-cache { background: #17a2b8; color: white; }
+        #btn-gif { background: #6f42c1; color: white; }
+
+        /* Box stato creazione GIF / Cache */
+        #status-box {
+            display: none;
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+            padding: 6px 8px;
+            border-radius: 5px;
+            margin-bottom: 6px;
+            font-size: 0.78rem;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        /* Opzioni ultra-compatte */
+        .options {
+            margin-bottom: 6px;
+            padding: 6px 9px;
+            background: #fff;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+        }
+
+        .option-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.76rem;
+            margin-bottom: 4px;
+        }
+        .option-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .slider-num-group {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .num-input {
+            width: 44px;
+            padding: 2px 4px;
+            border: 1px solid #ced4da;
+            border-radius: 3px;
+            font-size: 0.76rem;
+            font-weight: bold;
+            color: #2c3e50;
+            text-align: center;
+        }
+        .num-input:focus {
+            outline: none;
+            border-color: #007bff;
+            background: #f4f9ff;
+        }
+
+        .unit-label {
+            font-size: 0.7rem;
+            color: #666;
+            font-weight: bold;
+        }
+
+        /* Box caricamento immagine personale (visibile solo se serve o super compatto) */
+        #custom-image-box {
+            background: #eef6ff;
+            border: 1px dashed #007bff;
+            padding: 5px 7px;
+            border-radius: 4px;
+            margin: 4px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 0.74rem;
+        }
+
+        .custom-img-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+        }
+
+        #custom-image-box input[type="file"] {
+            font-size: 0.72rem;
+            max-width: 210px;
+        }
+
+        .img-view-btns {
+            display: none;
+            gap: 5px;
+        }
+        .img-view-btns button {
+            padding: 3px 6px;
+            font-size: 0.7rem;
+            background: #007bff;
+            color: white;
+        }
+
+        select {
+            padding: 2px 5px;
+            border-radius: 3px;
+            border: 1px solid #ccc;
+            font-size: 0.76rem;
+            cursor: pointer;
+            max-width: 210px;
+        }
+
+        input[type="checkbox"] {
+            transform: scale(1.1);
+            cursor: pointer;
+            margin: 0;
+        }
+
+        /* Lista punti (Massima altezza disponibile!) */
+        .list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            border-bottom: 2px solid #dee2e6;
+            padding-bottom: 3px;
+            margin-bottom: 6px;
+        }
+
+        h3 {
+            font-size: 0.88rem;
+            margin: 0;
+        }
+
+        .total-time {
+            font-size: 0.78rem;
+            color: #6f42c1;
+            font-weight: bold;
+        }
+
+        #points-list {
+            list-style: none;
+            padding: 0 2px 0 0;
+            margin: 0;
+            flex: 1 1 auto;
+            overflow-y: auto;
+        }
+
+        .point-item {
+            display: flex;
+            flex-direction: column;
+            background: white;
+            padding: 7px 9px;
+            margin-bottom: 6px;
+            border-radius: 5px;
+            border: 2px solid #e0e0e0;
+            font-size: 0.8rem;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+        }
+
+        .point-item.active-segment {
+            border-color: #28a745;
+            background: #f3fff6;
+            box-shadow: 0 0 6px rgba(40, 167, 69, 0.25);
+        }
+
+        .point-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 4px;
+            width: 100%;
+        }
+
+        .point-name-input {
+            border: 1px solid #ced4da;
+            border-radius: 3px;
+            padding: 2px 5px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #2c3e50;
+            width: 115px;
+        }
+
+        .vis-toggles {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            background: #f1f3f5;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .vis-toggles label {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .coords-text {
+            font-size: 0.68rem;
+            color: #888;
+            flex-grow: 1;
+            text-align: right;
+            margin-right: 2px;
+        }
+
+        .segment-settings {
+            margin-top: 5px;
+            padding-top: 5px;
+            border-top: 1px dashed #dee2e6;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            background: rgba(248, 249, 250, 0.75);
+            padding: 5px 6px;
+            border-radius: 4px;
+        }
+
+        .segment-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.74rem;
+            color: #495057;
+        }
+
+        .segment-row input[type="range"] {
+            width: 85px;
+            cursor: pointer;
+            height: 16px;
+            margin: 0;
+        }
+
+        .style-controls-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        input[type="color"] {
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            width: 24px;
+            height: 20px;
+            padding: 0;
+            cursor: pointer;
+            background: none;
+        }
+
+        .badge {
+            background: #e9ecef;
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-weight: bold;
+            min-width: 30px;
+            text-align: center;
+            color: #2c3e50;
+            font-size: 0.69rem;
+        }
+
+        .wp-btn-group {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .wp-btn {
+            background: #007bff;
+            color: white;
+            padding: 2px 8px;
+            font-size: 0.72rem;
+            border-radius: 3px;
+            flex: 0;
+            white-space: nowrap;
+        }
+
+        .wp-clear-btn {
+            background: #6c757d;
+            color: white;
+            padding: 2px 6px;
+            font-size: 0.72rem;
+            border-radius: 3px;
+            flex: 0;
+        }
+
+        .remove-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            padding: 2px 6px;
+            cursor: pointer;
+            font-size: 0.74rem;
+            flex: 0;
+        }
+
+        /* Mappa */
+        #map {
+            flex-grow: 1;
+            height: 100%;
+            cursor: crosshair;
+            background: #2b2b2b;
+        }
+
+        /* Stile Mini-Waypoint */
+        .mini-wp-wrapper {
+            background: transparent;
+            border: none;
+        }
+        .mini-wp-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #007bff;
+            border: 2px solid #ffffff;
+            box-shadow: 0 0 5px rgba(0,0,0,0.6);
+            opacity: 0.16;
+            transition: opacity 0.15s ease, transform 0.15s ease;
+            cursor: grab;
+        }
+        .mini-wp-wrapper:hover .mini-wp-dot,
+        .mini-wp-dot:active {
+            opacity: 1 !important;
+            transform: scale(1.35);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <div class="top-bar">
+            <h2>🌍 Creatore Viaggi Pro</h2>
+            <button id="btn-help" onclick="toggleHelp()">❓ Help</button>
+        </div>
+
+        <div id="help-box">
+            • <b>Tappe</b>: Clicca sulla mappa per creare tappe. Spunta <b>📍Pin</b> e <b>💬Testo</b> per mostrarli/nasconderli.<br>
+            • <b>Spezzate</b>: Clicca sulla linea tra 2 tappe o premi <b>+ Curva</b> per aggiungere snodi. Passaci sopra col mouse per trascinarli (<i>clic destro per eliminarli</i>).<br>
+            • <b>Play Cinema</b>: Nasconde l'interfaccia, attende i secondi di <b>Cut Inizio</b>, anima il viaggio e attende <b>Cut Fine</b> prima di mostrare i comandi (premi <code>ESC</code> per uscire subito).<br>
+            • <b>Zoom Live</b>: In Play puoi usare la rotellina del mouse o gli slider per cambiare lo zoom in diretta.
+        </div>
+        
+        <div class="controls">
+            <button id="btn-play" onclick="startAnimation(false)">▶ Play</button>
+            <button id="btn-cinema" onclick="startAnimation(true)" title="Nasconde tutti i comandi con tempi di Cut">🎥 Play Cinema</button>
+            <button id="btn-reset" onclick="resetAnimation()">⏮ Reset</button>
+            <button id="btn-clear" onclick="clearAll()">🗑 Pulisci</button>
+        </div>
+        <div class="controls">
+            <button id="btn-cache" onclick="preCacheRoute()" title="Pre-carica la mappa online nella memoria cache">⚡ Pre-carica Cache</button>
+            <button id="btn-gif" onclick="exportToGif()">🎬 Salva GIF Fluida</button>
+        </div>
+
+        <div id="status-box">⏳ Operazione in corso...</div>
+
+        <div class="options">
+            <div class="option-row">
+                <label for="map-style">🗺️ Sfondo:</label>
+                <select id="map-style" onchange="changeMapStyle(this.value)">
+                    <option value="esri_street">Esri Stradale (Online)</option>
+                    <option value="esri_topo">Esri Topografica (Online)</option>
+                    <option value="esri_sat">Esri Satellite (Online)</option>
+                    <option value="osm_de">OpenStreetMap (Online)</option>
+                    <option value="custom_image">🖼️ Mia Immagine (1:1 Reale)</option>
+                </select>
+            </div>
+
+            <!-- Box immagine personale compatto -->
+            <div id="custom-image-box">
+                <div class="custom-img-row">
+                    <span><b>🖼️ Immagine 1:1:</b></span>
+                    <input type="file" id="custom-map-input" accept="image/*" onchange="handleCustomImageUpload(event)">
+                </div>
+                <span id="custom-image-info" style="color:#555; font-size:0.7rem;">Scegli un file per usarlo senza deformazioni.</span>
+                <div class="img-view-btns" id="img-view-btns">
+                    <button onclick="setRealSizeView()">🔍 Scala 1:1 (100%)</button>
+                    <button onclick="fitFullImageView()" style="background:#17a2b8;">📐 Adatta schermo</button>
+                </div>
+            </div>
+
+            <!-- Parametri di Cut Inizio e Cut Fine configurabili -->
+            <div class="option-row">
+                <span>✂️ <b>Cut Cinema</b> (Inizio / Fine):</span>
+                <div class="slider-num-group">
+                    <span class="unit-label">In:</span>
+                    <input type="text" id="cut-start-num" class="num-input" value="2" 
+                        onblur="validateCutInput(this, 2)" title="Secondi di fermo immagine senza comandi PRIMA che parta l'animazione">
+                    <span class="unit-label">s | Out:</span>
+                    <input type="text" id="cut-end-num" class="num-input" value="2.5" 
+                        onblur="validateCutInput(this, 2.5)" title="Secondi di fermo immagine senza comandi DOPO la fine dell'animazione">
+                    <span class="unit-label">s</span>
+                </div>
+            </div>
+
+            <!-- Scelta FPS da 1 a 20 + Checkbox Follow -->
+            <div class="option-row">
+                <div class="slider-num-group">
+                    <span>🎞️ FPS GIF:</span>
+                    <input type="range" id="gif-fps-slider" min="1" max="20" step="0.5" value="15" 
+                        style="width: 65px; cursor: pointer;"
+                        oninput="syncFpsControl(this.value, 'slider')">
+                    <input type="text" id="gif-fps-num" class="num-input" value="15" 
+                        oninput="syncFpsControl(this.value, 'text')"
+                        onblur="validateFpsOnBlur()">
+                </div>
+                <label style="display:flex; align-items:center; gap:4px; cursor:pointer;" title="Segue la linea e applica lo zoom di ogni tratto">
+                    <input type="checkbox" id="follow-zoom" checked> 🔍 Segui Zoom
+                </label>
+            </div>
+        </div>
+
+        <div class="list-header">
+            <h3>Tappe (<span id="point-count">0</span>)</h3>
+            <span class="total-time">Viaggio: <span id="total-duration">0</span>s</span>
+        </div>
+        <ul id="points-list"></ul>
+    </div>
+
+    <div id="map"></div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        // Toggle pannello Help collassabile
+        function toggleHelp() {
+            const box = document.getElementById('help-box');
+            const isHidden = box.style.display === 'none' || box.style.display === '';
+            box.style.display = isHidden ? 'block' : 'none';
+        }
+
+        // 1. Inizializzazione Mappa
+        const map = L.map('map', {
+            preferCanvas: true,
+            zoomSnap: 0,
+            zoomDelta: 0.5,
+            wheelPxPerZoomLevel: 80,
+            minZoom: -5,
+            maxZoom: 18
+        }).setView([38.0, 15.0], 4);
+
+        const tileProviders = {
+            esri_street: {
+                url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+                attribution: 'Tiles &copy; Esri'
+            },
+            esri_topo: {
+                url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+                attribution: 'Tiles &copy; Esri'
+            },
+            esri_sat: {
+                url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                attribution: 'Tiles &copy; Esri'
+            },
+            osm_de: {
+                url: 'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
+                attribution: '&copy; OpenStreetMap contributors'
+            }
+        };
+
+        let currentTileLayer = null;
+        let customImageOverlay = null;
+        let customImageDataUrl = null;
+        let customImgWidth = 0;
+        let customImgHeight = 0;
+        let customImageBounds = null;
+        let isCustomImageMode = false;
+        let currentFps = 15;
+
+        let pendingTilesCount = 0;
+        const ramTileCache = [];
+
+        function parseDecimalInput(valStr) {
+            if (typeof valStr !== 'string') valStr = String(valStr);
+            const normalized = valStr.replace(',', '.');
+            return parseFloat(normalized);
+        }
+
+        function validateCutInput(inputEl, defaultVal) {
+            let parsed = parseDecimalInput(inputEl.value);
+            if (isNaN(parsed) || parsed < 0) parsed = defaultVal;
+            if (parsed > 30) parsed = 30;
+            inputEl.value = Number(parsed.toFixed(2));
+        }
+
+        function getCutTimesMs() {
+            const startSec = parseDecimalInput(document.getElementById('cut-start-num').value);
+            const endSec = parseDecimalInput(document.getElementById('cut-end-num').value);
+            return {
+                startMs: Math.max(0, (isNaN(startSec) ? 2 : startSec) * 1000),
+                endMs: Math.max(0, (isNaN(endSec) ? 2.5 : endSec) * 1000)
+            };
+        }
+
+        function getDashPattern(dashType, weight) {
+            const w = Math.max(1, weight || 4);
+            switch (dashType) {
+                case 'dashed': return `${w * 3}, ${w * 2}`;
+                case 'dotted': return `${w}, ${w * 2}`;
+                case 'dashdot': return `${w * 3}, ${w * 1.8}, ${w}, ${w * 1.8}`;
+                case 'solid':
+                default: return null;
+            }
+        }
+
+        function syncFpsControl(val, source) {
+            const parsed = parseDecimalInput(val);
+            if (!isNaN(parsed)) {
+                const clamped = Math.min(20, Math.max(1, parsed));
+                currentFps = clamped;
+                if (source === 'slider') {
+                    document.getElementById('gif-fps-num').value = Number(clamped.toFixed(2));
+                } else if (source === 'text') {
+                    document.getElementById('gif-fps-slider').value = clamped;
+                }
+            }
+        }
+
+        function validateFpsOnBlur() {
+            const numInput = document.getElementById('gif-fps-num');
+            let parsed = parseDecimalInput(numInput.value);
+            if (isNaN(parsed) || parsed < 1) parsed = 1;
+            if (parsed > 20) parsed = 20;
+            currentFps = Number(parsed.toFixed(2));
+            numInput.value = currentFps;
+            document.getElementById('gif-fps-slider').value = currentFps;
+        }
+
+        function attachTileCacheListeners(layer) {
+            pendingTilesCount = 0;
+            layer.on('tileloadstart', function() {
+                pendingTilesCount++;
+            });
+            layer.on('tileload', function(e) {
+                pendingTilesCount = Math.max(0, pendingTilesCount - 1);
+                if (e.tile && e.tile.src && ramTileCache.length < 800) {
+                    const cachedImg = new Image();
+                    cachedImg.crossOrigin = 'anonymous';
+                    cachedImg.src = e.tile.src;
+                    ramTileCache.push(cachedImg);
+                }
+            });
+            layer.on('tileerror', function() {
+                pendingTilesCount = Math.max(0, pendingTilesCount - 1);
+            });
+        }
+
+        function createOnlineTileLayer(styleKey) {
+            const provider = tileProviders[styleKey];
+            const layer = L.tileLayer(provider.url, {
+                attribution: provider.attribution,
+                maxZoom: 18,
+                minZoom: 2,
+                crossOrigin: 'anonymous',
+                keepBuffer: 16,
+                updateWhenIdle: false,
+                updateWhenZooming: true,
+                updateInterval: 50
+            });
+            attachTileCacheListeners(layer);
+            return layer;
+        }
+
+        currentTileLayer = createOnlineTileLayer('esri_street').addTo(map);
+
+        function getZoomLimits() {
+            if (isCustomImageMode) {
+                return { min: -4, max: 4, def: 0 };
+            } else {
+                return { min: 2, max: 16, def: 6 };
+            }
+        }
+
+        function formatZoomBadge(z) {
+            if (isCustomImageMode) {
+                const scalePct = Math.round(Math.pow(2, z) * 100);
+                return `${scalePct}%`;
+            }
+            return `Lv`;
+        }
+
+        function changeMapStyle(styleKey) {
+            if (currentTileLayer) {
+                map.removeLayer(currentTileLayer);
+                currentTileLayer = null;
+            }
+            if (customImageOverlay) {
+                map.removeLayer(customImageOverlay);
+                customImageOverlay = null;
+            }
+
+            const wasCustomMode = isCustomImageMode;
+
+            if (styleKey === 'custom_image') {
+                isCustomImageMode = true;
+                if (map.options.crs !== L.CRS.Simple) {
+                    clearAllPointsRaw();
+                    map.options.crs = L.CRS.Simple;
+                    map.options.minZoom = -5;
+                    map.options.maxZoom = 5;
+                }
+                if (customImageDataUrl) {
+                    applyCustomImageToMap();
+                } else {
+                    document.getElementById('custom-image-info').innerHTML = "<b style='color:#d9534f;'>⬆️ Seleziona un file immagine qui sopra!</b>";
+                }
+            } else {
+                isCustomImageMode = false;
+                document.getElementById('img-view-btns').style.display = 'none';
+                if (map.options.crs !== L.CRS.EPSG3857) {
+                    clearAllPointsRaw();
+                    map.options.crs = L.CRS.EPSG3857;
+                    map.options.minZoom = 2;
+                    map.options.maxZoom = 18;
+                    map.setView([38.0, 15.0], 4, { animate: false });
+                } else if (wasCustomMode) {
+                    map.setView([38.0, 15.0], 4, { animate: false });
+                }
+                currentTileLayer = createOnlineTileLayer(styleKey).addTo(map);
+            }
+            updateUI();
+        }
+
+        function handleCustomImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                customImageDataUrl = e.target.result;
+                
+                const img = new Image();
+                img.onload = function() {
+                    customImgWidth = img.naturalWidth || img.width;
+                    customImgHeight = img.naturalHeight || img.height;
+
+                    customImageBounds = [[0, 0], [customImgHeight, customImgWidth]];
+
+                    document.getElementById('map-style').value = 'custom_image';
+                    document.getElementById('custom-image-info').innerHTML = 
+                        `✅ <b>${file.name}</b> (${customImgWidth}×${customImgHeight}px - 1:1)`;
+                    document.getElementById('img-view-btns').style.display = 'flex';
+
+                    changeMapStyle('custom_image');
+                };
+                img.src = customImageDataUrl;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function applyCustomImageToMap() {
+            if (!customImageDataUrl || !customImageBounds) return;
+            if (customImageOverlay) map.removeLayer(customImageOverlay);
+
+            customImageOverlay = L.imageOverlay(customImageDataUrl, customImageBounds, {
+                opacity: 1,
+                interactive: false
+            }).addTo(map);
+
+            setRealSizeView();
+        }
+
+        function setRealSizeView() {
+            if (!isCustomImageMode || !customImageBounds) return;
+            const centerLat = customImgHeight / 2;
+            const centerLng = customImgWidth / 2;
+            programmaticZoomChange = true;
+            map.setView([centerLat, centerLng], 0, { animate: false });
+            programmaticZoomChange = false;
+        }
+
+        function fitFullImageView() {
+            if (!isCustomImageMode || !customImageBounds) return;
+            programmaticZoomChange = true;
+            map.fitBounds(customImageBounds, { animate: false });
+            programmaticZoomChange = false;
+        }
+
+        // Variabili di stato del percorso e Modalità Cinema
+        let points = [];
+        let markers = [];
+        let commentLabels = [];
+        let previewSegments = [];
+        let wpMarkers = [];
+        let animatedPolylines = [];
+        
+        let headMarker = null;
+        let isAnimating = false;
+        let isCinemaMode = false;
+        let isRecordingGif = false;
+        let isCaching = false;
+        let animationFrameId = null;
+        let prePlayTimeoutId = null;
+        let postPlayTimeoutId = null;
+
+        let currentSegment = 0;
+        let segmentStartTime = 0;
+        let segmentStartZoom = 5;
+        let programmaticZoomChange = false;
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && isCinemaMode) {
+                resetAnimation();
+            }
+        });
+
+        function enterCinemaUI() {
+            isCinemaMode = true;
+            document.body.classList.add('cinema-mode');
+            map.invalidateSize({ animate: false });
+        }
+
+        function exitCinemaUI() {
+            if (!isCinemaMode) return;
+            isCinemaMode = false;
+            document.body.classList.remove('cinema-mode');
+            map.invalidateSize({ animate: false });
+        }
+
+        // Intercetta lo zoom fatto dall'utente in diretta durante il Play
+        map.on('zoom', function() {
+            if (isAnimating && !programmaticZoomChange) {
+                const activeIdx = currentSegment + 1;
+                if (points[activeIdx]) {
+                    const lim = getZoomLimits();
+                    const userZoom = Math.min(lim.max, Math.max(lim.min, Number(map.getZoom().toFixed(2))));
+                    points[activeIdx].zoom = userZoom;
+                    segmentStartZoom = userZoom;
+
+                    const slider = document.getElementById(`zoom-slider-${activeIdx}`);
+                    const numInp = document.getElementById(`zoom-num-${activeIdx}`);
+                    const badge = document.getElementById(`zoom-val-${activeIdx}`);
+                    if (slider) slider.value = userZoom;
+                    if (numInp) numInp.value = userZoom;
+                    if (badge) badge.innerText = formatZoomBadge(userZoom);
+                }
+            }
+        });
+
+        // 2. Click sulla mappa per aggiungere una tappa
+        map.on('click', function(e) {
+            if (isAnimating || isCinemaMode || isRecordingGif || isCaching) return;
+            addPoint(e.latlng);
+        });
+
+        function addPoint(latlng) {
+            const idx = points.length + 1;
+            const lim = getZoomLimits();
+            const currentMapZoom = Number(Math.min(lim.max, Math.max(lim.min, map.getZoom())).toFixed(1));
+            const prevPt = points.length > 0 ? points[points.length - 1] : null;
+
+            points.push({
+                latlng: latlng,
+                name: `Tappa ${idx}`,
+                showPin: true,
+                showComment: true,
+                duration: 4,
+                zoom: isCustomImageMode ? currentMapZoom : (currentMapZoom < 4 ? 5 : Math.round(currentMapZoom)),
+                color: prevPt ? prevPt.color : '#e60000',
+                weight: prevPt ? prevPt.weight : 4,
+                dash: prevPt ? prevPt.dash : 'solid',
+                waypoints: []
+            });
+            
+            const marker = L.marker(latlng, { draggable: true }).addTo(map);
+            const labelTooltip = L.tooltip({
+                permanent: true,
+                direction: 'top',
+                offset: [0, -34]
+            });
+            
+            marker.on('drag', function(ev) {
+                if (isAnimating || isCinemaMode || isRecordingGif || isCaching) return;
+                const mIdx = markers.indexOf(marker);
+                if (mIdx !== -1) {
+                    const newPos = ev.target.getLatLng();
+                    points[mIdx].latlng = newPos;
+                    commentLabels[mIdx].setLatLng(newPos);
+                    refreshEditPolylinesOnly();
+                    const coordEl = document.getElementById(`coord-text-${mIdx}`);
+                    if (coordEl) {
+                        coordEl.innerText = isCustomImageMode 
+                            ? `${Math.round(newPos.lng)},${Math.round(newPos.lat)}px`
+                            : `${newPos.lat.toFixed(1)},${newPos.lng.toFixed(1)}`;
+                    }
+                }
+            });
+
+            markers.push(marker);
+            commentLabels.push(labelTooltip);
+
+            updateUI(true); // Scorri in fondo solo quando aggiungi una nuova tappa principale
+            renderEditOverlays();
+        }
+
+        function removePoint(index) {
+            if (isAnimating || isCinemaMode || isRecordingGif || isCaching) return;
+            
+            points.splice(index, 1);
+            map.removeLayer(markers[index]);
+            map.removeLayer(commentLabels[index]);
+            markers.splice(index, 1);
+            commentLabels.splice(index, 1);
+            
+            resetAnimation();
+            updateUI(false);
+            renderEditOverlays();
+        }
+
+        function syncMarkerAndCommentVisibility(index) {
+            const ptObj = points[index];
+            const marker = markers[index];
+            const label = commentLabels[index];
+            if (!ptObj || !marker || !label) return;
+
+            const inPlayOrGif = isAnimating || isCinemaMode || isRecordingGif;
+
+            if (ptObj.showPin) {
+                marker.setOpacity(1);
+            } else {
+                marker.setOpacity(inPlayOrGif ? 0 : 0.25);
+            }
+
+            const text = (ptObj.name || '').trim();
+            label.setContent(text || `Tappa ${index + 1}`);
+            label.setLatLng(ptObj.latlng);
+            label.options.offset = ptObj.showPin ? [0, -34] : [0, -6];
+
+            if (ptObj.showComment && text.length > 0) {
+                if (!map.hasLayer(label)) {
+                    label.addTo(map);
+                } else {
+                    label.update();
+                }
+            } else {
+                if (map.hasLayer(label)) {
+                    map.removeLayer(label);
+                }
+            }
+        }
+
+        function syncAllMarkersAndComments() {
+            for (let i = 0; i < points.length; i++) {
+                syncMarkerAndCommentVisibility(i);
+            }
+        }
+
+        function updatePointName(index, newName) {
+            points[index].name = newName;
+            syncMarkerAndCommentVisibility(index);
+        }
+
+        function togglePointPin(index, checked) {
+            points[index].showPin = checked;
+            syncMarkerAndCommentVisibility(index);
+        }
+
+        function togglePointComment(index, checked) {
+            points[index].showComment = checked;
+            syncMarkerAndCommentVisibility(index);
+        }
+
+        function updateSegmentColor(index, newColor) {
+            points[index].color = newColor;
+            refreshSegmentStyleLive(index);
+        }
+
+        function updateSegmentWeight(index, rawValue, source) {
+            const parsed = parseDecimalInput(rawValue);
+            if (!isNaN(parsed)) {
+                const w = Math.min(20, Math.max(1, parsed));
+                points[index].weight = w;
+                if (source === 'slider') {
+                    const numEl = document.getElementById(`weight-num-${index}`);
+                    if (numEl) numEl.value = Number(w.toFixed(1));
+                } else if (source === 'text') {
+                    const sliderEl = document.getElementById(`weight-slider-${index}`);
+                    if (sliderEl) sliderEl.value = w;
+                }
+                refreshSegmentStyleLive(index);
+            }
+        }
+
+        function validateSegmentWeightOnBlur(index) {
+            const numEl = document.getElementById(`weight-num-${index}`);
+            const sliderEl = document.getElementById(`weight-slider-${index}`);
+            if (!numEl) return;
+            let parsed = parseDecimalInput(numEl.value);
+            if (isNaN(parsed) || parsed < 1) parsed = 1;
+            if (parsed > 20) parsed = 20;
+            const cleanVal = Number(parsed.toFixed(1));
+            points[index].weight = cleanVal;
+            numEl.value = cleanVal;
+            if (sliderEl) sliderEl.value = cleanVal;
+            refreshSegmentStyleLive(index);
+        }
+
+        function updateSegmentDash(index, newDash) {
+            points[index].dash = newDash;
+            refreshSegmentStyleLive(index);
+        }
+
+        function refreshSegmentStyleLive(destIdx) {
+            const segIdx = destIdx - 1;
+            const pt = points[destIdx];
+            const dashPattern = getDashPattern(pt.dash, pt.weight);
+
+            if (previewSegments[segIdx]) {
+                previewSegments[segIdx].setStyle({
+                    color: pt.color,
+                    weight: pt.weight,
+                    dashArray: dashPattern || '6, 6'
+                });
+            }
+
+            if (animatedPolylines[segIdx]) {
+                animatedPolylines[segIdx].setStyle({
+                    color: pt.color,
+                    weight: pt.weight,
+                    dashArray: dashPattern
+                });
+            }
+            if (isAnimating && currentSegment === segIdx && headMarker) {
+                headMarker.setStyle({ fillColor: pt.color });
+            }
+        }
+
+        function updateSegmentDuration(index, rawValue, source) {
+            const parsed = parseDecimalInput(rawValue);
+            if (!isNaN(parsed)) {
+                const clamped = Math.min(60, Math.max(0.1, parsed));
+                points[index].duration = clamped;
+                if (source === 'slider') {
+                    const numEl = document.getElementById(`dur-num-${index}`);
+                    if (numEl) numEl.value = Number(clamped.toFixed(2));
+                } else if (source === 'text') {
+                    const sliderEl = document.getElementById(`dur-slider-${index}`);
+                    if (sliderEl) sliderEl.value = clamped;
+                }
+                updateTotalDuration();
+            }
+        }
+
+        function validateSegmentDurationOnBlur(index) {
+            const numEl = document.getElementById(`dur-num-${index}`);
+            const sliderEl = document.getElementById(`dur-slider-${index}`);
+            if (!numEl) return;
+            let parsed = parseDecimalInput(numEl.value);
+            if (isNaN(parsed) || parsed < 0.1) parsed = 0.5;
+            if (parsed > 60) parsed = 60;
+            const cleanVal = Number(parsed.toFixed(2));
+            points[index].duration = cleanVal;
+            numEl.value = cleanVal;
+            if (sliderEl) sliderEl.value = cleanVal;
+            updateTotalDuration();
+        }
+
+        function updateSegmentZoom(index, rawValue, source) {
+            const lim = getZoomLimits();
+            const parsed = parseDecimalInput(rawValue);
+            if (!isNaN(parsed)) {
+                const z = Math.min(lim.max, Math.max(lim.min, parsed));
+                points[index].zoom = z;
+
+                if (source === 'slider') {
+                    const numEl = document.getElementById(`zoom-num-${index}`);
+                    if (numEl) numEl.value = Number(z.toFixed(2));
+                } else if (source === 'text') {
+                    const sliderEl = document.getElementById(`zoom-slider-${index}`);
+                    if (sliderEl) sliderEl.value = z;
+                }
+
+                const badge = document.getElementById(`zoom-val-${index}`);
+                if (badge) badge.innerText = formatZoomBadge(z);
+
+                if (isAnimating && currentSegment + 1 === index) {
+                    segmentStartZoom = z;
+                    if (document.getElementById('follow-zoom').checked) {
+                        programmaticZoomChange = true;
+                        map.setZoom(z, { animate: false });
+                        programmaticZoomChange = false;
+                    }
+                }
+            }
+        }
+
+        function validateSegmentZoomOnBlur(index) {
+            const lim = getZoomLimits();
+            const numEl = document.getElementById(`zoom-num-${index}`);
+            const sliderEl = document.getElementById(`zoom-slider-${index}`);
+            if (!numEl) return;
+            let parsed = parseDecimalInput(numEl.value);
+            if (isNaN(parsed)) parsed = lim.def;
+            parsed = Math.min(lim.max, Math.max(lim.min, parsed));
+            const cleanVal = Number(parsed.toFixed(2));
+            points[index].zoom = cleanVal;
+            numEl.value = cleanVal;
+            if (sliderEl) sliderEl.value = cleanVal;
+            const badge = document.getElementById(`zoom-val-${index}`);
+            if (badge) badge.innerText = formatZoomBadge(cleanVal);
+        }
+
+        function updateTotalDuration() {
+            let total = 0;
+            for (let i = 1; i < points.length; i++) {
+                total += points[i].duration;
+            }
+            document.getElementById('total-duration').innerText = Number(total.toFixed(2));
+        }
+
+        // 3. Gestione Spezzata e Mini-Waypoint (SENZA FARE SALTARE LO SCROLL DELLA LISTA!)
+        function getSegmentPath(segIdx) {
+            const start = points[segIdx].latlng;
+            const end = points[segIdx + 1].latlng;
+            const wps = points[segIdx + 1].waypoints || [];
+            return [start, ...wps, end];
+        }
+
+        function getGeometricDistance(latlngA, latlngB) {
+            if (isCustomImageMode) {
+                return Math.hypot(latlngB.lng - latlngA.lng, latlngB.lat - latlngA.lat);
+            } else {
+                return map.distance(latlngA, latlngB);
+            }
+        }
+
+        // Aggiorna SOLO il contatore e il bottone "Retta" di quel singolo segmento senza toccare il DOM della lista!
+        function updateWaypointCountInPlace(destIdx) {
+            const wpCount = points[destIdx].waypoints.length;
+            const countSpan = document.getElementById(`wp-count-${destIdx}`);
+            const clearBtn = document.getElementById(`wp-clear-btn-${destIdx}`);
+            if (countSpan) countSpan.innerText = wpCount;
+            if (clearBtn) clearBtn.style.display = wpCount > 0 ? 'inline-block' : 'none';
+        }
+
+        function insertWaypointAtClick(destIdx, clickLatLng) {
+            const path = getSegmentPath(destIdx - 1);
+            let bestInsertIdx = path.length - 1;
+            let minDist = Infinity;
+
+            const clickPt = map.latLngToLayerPoint(clickLatLng);
+            for (let i = 0; i < path.length - 1; i++) {
+                const p1 = map.latLngToLayerPoint(path[i]);
+                const p2 = map.latLngToLayerPoint(path[i + 1]);
+                const dist = L.LineUtil.pointToSegmentDistance(clickPt, p1, p2);
+                if (dist < minDist) {
+                    minDist = dist;
+                    bestInsertIdx = i;
+                }
+            }
+
+            points[destIdx].waypoints.splice(bestInsertIdx, 0, clickLatLng);
+            updateWaypointCountInPlace(destIdx);
+            renderEditOverlays();
+        }
+
+        function addWaypointMidpoint(destIdx) {
+            if (isAnimating || isCinemaMode || isRecordingGif || isCaching) return;
+            const path = getSegmentPath(destIdx - 1);
+            const p1 = path[path.length - 2];
+            const p2 = path[path.length - 1];
+            const midLat = (p1.lat + p2.lat) / 2 + (p2.lng - p1.lng) * 0.08;
+            const midLng = (p1.lng + p2.lng) / 2 - (p2.lat - p1.lat) * 0.08;
+            points[destIdx].waypoints.push(L.latLng(midLat, midLng));
+            
+            // Aggiornamento in-place: il pulsante "+ Curva" NON si muove di un millimetro sotto il mouse!
+            updateWaypointCountInPlace(destIdx);
+            renderEditOverlays();
+        }
+
+        function clearWaypoints(destIdx) {
+            if (isAnimating || isCinemaMode || isRecordingGif || isCaching) return;
+            points[destIdx].waypoints = [];
+            updateWaypointCountInPlace(destIdx);
+            renderEditOverlays();
+        }
+
+        function renderEditOverlays() {
+            previewSegments.forEach(l => map.removeLayer(l));
+            previewSegments = [];
+            wpMarkers.forEach(m => map.removeLayer(m));
+            wpMarkers = [];
+
+            syncAllMarkersAndComments();
+
+            if (isAnimating || isCinemaMode || isRecordingGif || isCaching) return;
+
+            for (let i = 1; i < points.length; i++) {
+                const path = getSegmentPath(i - 1);
+                const pt = points[i];
+                const customDash = getDashPattern(pt.dash, pt.weight);
+
+                const poly = L.polyline(path, {
+                    color: pt.color,
+                    weight: pt.weight,
+                    dashArray: customDash || '6, 6',
+                    opacity: 0.55
+                }).addTo(map);
+
+                poly.on('click', function(e) {
+                    L.DomEvent.stopPropagation(e);
+                    insertWaypointAtClick(i, e.latlng);
+                });
+
+                previewSegments.push(poly);
+
+                points[i].waypoints.forEach((wpLatLng, wpIdx) => {
+                    const icon = L.divIcon({
+                        className: 'mini-wp-wrapper',
+                        html: '<div class="mini-wp-dot" title="Trascina per curvare | Clic destro per eliminare"></div>',
+                        iconSize: [18, 18],
+                        iconAnchor: [9, 9]
+                    });
+
+                    const wpMarker = L.marker(wpLatLng, {
+                        icon: icon,
+                        draggable: true
+                    }).addTo(map);
+
+                    wpMarker.on('drag', function(e) {
+                        points[i].waypoints[wpIdx] = e.target.getLatLng();
+                        poly.setLatLngs(getSegmentPath(i - 1));
+                    });
+
+                    wpMarker.on('contextmenu', function(e) {
+                        L.DomEvent.stopPropagation(e);
+                        points[i].waypoints.splice(wpIdx, 1);
+                        updateWaypointCountInPlace(i);
+                        renderEditOverlays();
+                    });
+
+                    wpMarker.on('click', function(e) {
+                        L.DomEvent.stopPropagation(e);
+                    });
+
+                    wpMarkers.push(wpMarker);
+                });
+            }
+        }
+
+        function refreshEditPolylinesOnly() {
+            for (let i = 1; i < points.length; i++) {
+                if (previewSegments[i - 1]) {
+                    previewSegments[i - 1].setLatLngs(getSegmentPath(i - 1));
+                }
+            }
+        }
+
+        function highlightActiveSegmentInUI() {
+            points.forEach((_, idx) => {
+                const itemEl = document.getElementById(`point-item-${idx}`);
+                if (!itemEl) return;
+                if (isAnimating && idx === currentSegment + 1) {
+                    itemEl.classList.add('active-segment');
+                } else {
+                    itemEl.classList.remove('active-segment');
+                }
+            });
+        }
+
+        function updateUI(scrollToBottom = false) {
+            const list = document.getElementById('points-list');
+            // Memorizza la posizione esatta dello scroll prima di aggiornare!
+            const savedScrollTop = list.scrollTop;
+
+            const countSpan = document.getElementById('point-count');
+            list.innerHTML = '';
+            countSpan.innerText = points.length;
+            updateTotalDuration();
+
+            const structureLocked = isAnimating || isCinemaMode || isRecordingGif || isCaching;
+            const sliderLocked = isRecordingGif || isCaching;
+            const lim = getZoomLimits();
+
+            points.forEach((ptObj, idx) => {
+                const pt = ptObj.latlng;
+                syncMarkerAndCommentVisibility(idx);
+                
+                const li = document.createElement('li');
+                li.className = 'point-item';
+                li.id = `point-item-${idx}`;
+                if (isAnimating && idx === currentSegment + 1) {
+                    li.classList.add('active-segment');
+                }
+
+                const coordLabel = isCustomImageMode 
+                    ? `${Math.round(pt.lng)},${Math.round(pt.lat)}px`
+                    : `${pt.lat.toFixed(1)},${pt.lng.toFixed(1)}`;
+                
+                let htmlContent = `
+                    <div class="point-header">
+                        <input type="text" class="point-name-input" value="${ptObj.name.replace(/"/g, '&quot;')}" 
+                            ${sliderLocked ? 'disabled' : ''}
+                            oninput="updatePointName(${idx}, this.value)" placeholder="Commento/Nome...">
+                        <div class="vis-toggles" title="Mostra/Nascondi Pin e Testo">
+                            <label><input type="checkbox" ${ptObj.showPin ? 'checked' : ''} ${sliderLocked ? 'disabled' : ''} onchange="togglePointPin(${idx}, this.checked)">📍Pin</label>
+                            <label><input type="checkbox" ${ptObj.showComment ? 'checked' : ''} ${sliderLocked ? 'disabled' : ''} onchange="togglePointComment(${idx}, this.checked)">💬Testo</label>
+                        </div>
+                        <span class="coords-text" id="coord-text-${idx}">${coordLabel}</span>
+                        <button class="remove-btn" onclick="removePoint(${idx})" ${structureLocked ? 'disabled' : ''} title="Rimuovi tappa">✖</button>
+                    </div>
+                `;
+
+                if (idx > 0) {
+                    const wpCount = ptObj.waypoints.length;
+                    htmlContent += `
+                        <div class="segment-settings">
+                            <div class="segment-row">
+                                <span>🎨 Riga #${idx}&rarr;#${idx + 1}:</span>
+                                <div class="style-controls-group">
+                                    <input type="color" value="${ptObj.color}" ${sliderLocked ? 'disabled' : ''} 
+                                        oninput="updateSegmentColor(${idx}, this.value)" title="Colore riga">
+                                    <select onchange="updateSegmentDash(${idx}, this.value)" ${sliderLocked ? 'disabled' : ''} title="Tratteggio">
+                                        <option value="solid" ${ptObj.dash === 'solid' ? 'selected' : ''}>━━ Continua</option>
+                                        <option value="dashed" ${ptObj.dash === 'dashed' ? 'selected' : ''}>╍╍ Tratteggiata</option>
+                                        <option value="dotted" ${ptObj.dash === 'dotted' ? 'selected' : ''}>┈┈ Puntinata</option>
+                                        <option value="dashdot" ${ptObj.dash === 'dashdot' ? 'selected' : ''}>━┈ Tratto-Punto</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="segment-row">
+                                <span>📏 Spessore:</span>
+                                <div class="slider-num-group">
+                                    <input type="range" id="weight-slider-${idx}" min="1" max="15" step="0.5" value="${ptObj.weight}" 
+                                        ${sliderLocked ? 'disabled' : ''}
+                                        oninput="updateSegmentWeight(${idx}, this.value, 'slider')">
+                                    <input type="text" id="weight-num-${idx}" class="num-input" value="${ptObj.weight}" 
+                                        ${sliderLocked ? 'disabled' : ''}
+                                        oninput="updateSegmentWeight(${idx}, this.value, 'text')"
+                                        onblur="validateSegmentWeightOnBlur(${idx})">
+                                    <span class="unit-label">px</span>
+                                </div>
+                            </div>
+                            <div class="segment-row">
+                                <span>⏱️ Durata:</span>
+                                <div class="slider-num-group">
+                                    <input type="range" id="dur-slider-${idx}" min="0.5" max="60" step="0.1" value="${ptObj.duration}" 
+                                        ${sliderLocked ? 'disabled' : ''}
+                                        oninput="updateSegmentDuration(${idx}, this.value, 'slider')">
+                                    <input type="text" id="dur-num-${idx}" class="num-input" value="${ptObj.duration}" 
+                                        ${sliderLocked ? 'disabled' : ''}
+                                        oninput="updateSegmentDuration(${idx}, this.value, 'text')"
+                                        onblur="validateSegmentDurationOnBlur(${idx})">
+                                    <span class="unit-label">sec</span>
+                                </div>
+                            </div>
+                            <div class="segment-row">
+                                <span>🔍 Zoom Live:</span>
+                                <div class="slider-num-group">
+                                    <input type="range" id="zoom-slider-${idx}" min="${lim.min}" max="${lim.max}" step="0.1" value="${ptObj.zoom}" 
+                                        ${sliderLocked ? 'disabled' : ''}
+                                        oninput="updateSegmentZoom(${idx}, this.value, 'slider')">
+                                    <input type="text" id="zoom-num-${idx}" class="num-input" value="${ptObj.zoom}" 
+                                        ${sliderLocked ? 'disabled' : ''}
+                                        oninput="updateSegmentZoom(${idx}, this.value, 'text')"
+                                        onblur="validateSegmentZoomOnBlur(${idx})">
+                                    <span class="badge" id="zoom-val-${idx}">${formatZoomBadge(ptObj.zoom)}</span>
+                                </div>
+                            </div>
+                            <div class="segment-row">
+                                <span>📐 Spezzata (<span id="wp-count-${idx}">${wpCount}</span> pt):</span>
+                                <div class="wp-btn-group">
+                                    <button type="button" class="wp-clear-btn" id="wp-clear-btn-${idx}" 
+                                        style="display: ${wpCount > 0 ? 'inline-block' : 'none'};"
+                                        onclick="clearWaypoints(${idx})" ${structureLocked ? 'disabled' : ''}>Retta</button>
+                                    <button type="button" class="wp-btn" onclick="addWaypointMidpoint(${idx})" ${structureLocked ? 'disabled' : ''}>+ Curva</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                li.innerHTML = htmlContent;
+                list.appendChild(li);
+            });
+
+            // Ripristina immediatamente lo scroll esattamente dov'era (oppure scorre giù se hai aggiunto una nuova tappa sulla mappa)
+            if (scrollToBottom) {
+                list.scrollTop = list.scrollHeight;
+            } else {
+                list.scrollTop = savedScrollTop;
+            }
+
+            document.getElementById('btn-play').disabled = structureLocked || points.length < 2;
+            document.getElementById('btn-cinema').disabled = structureLocked || points.length < 2;
+            document.getElementById('btn-gif').disabled = structureLocked || points.length < 2;
+            document.getElementById('btn-cache').disabled = structureLocked || points.length < 2 || isCustomImageMode;
+            document.getElementById('btn-clear').disabled = structureLocked || points.length === 0;
+            document.getElementById('btn-reset').disabled = isRecordingGif || isCaching;
+        }
+
+        // 4. Calcolo coordinate lungo la Spezzata e Disegno Multi-Stile
+        function getPositionAlongSegment(segIdx, progress) {
+            const path = getSegmentPath(segIdx);
+            if (progress <= 0) return { currentPos: path[0], drawnCoords: [path[0]] };
+            if (progress >= 1) return { currentPos: path[path.length - 1], drawnCoords: path };
+
+            let dists = [];
+            let totalDist = 0;
+            for (let i = 0; i < path.length - 1; i++) {
+                const d = getGeometricDistance(path[i], path[i + 1]);
+                dists.push(d);
+                totalDist += d;
+            }
+
+            if (totalDist === 0) return { currentPos: path[0], drawnCoords: [path[0]] };
+
+            const targetDist = progress * totalDist;
+            let accumulated = 0;
+            let drawnCoords = [path[0]];
+
+            for (let i = 0; i < dists.length; i++) {
+                if (accumulated + dists[i] >= targetDist || i === dists.length - 1) {
+                    const subProgress = dists[i] === 0 ? 1 : (targetDist - accumulated) / dists[i];
+                    const lat = path[i].lat + (path[i + 1].lat - path[i].lat) * subProgress;
+                    const lng = path[i].lng + (path[i + 1].lng - path[i].lng) * subProgress;
+                    const currentPos = L.latLng(lat, lng);
+                    drawnCoords.push(currentPos);
+                    return { currentPos, drawnCoords };
+                } else {
+                    accumulated += dists[i];
+                    drawnCoords.push(path[i + 1]);
+                }
+            }
+        }
+
+        function initAnimatedPolylines() {
+            clearAnimatedPolylines();
+            for (let s = 0; s < points.length - 1; s++) {
+                const destPt = points[s + 1];
+                const poly = L.polyline([], {
+                    color: destPt.color,
+                    weight: destPt.weight,
+                    dashArray: getDashPattern(destPt.dash, destPt.weight),
+                    opacity: 0.95
+                }).addTo(map);
+                animatedPolylines.push(poly);
+            }
+        }
+
+        function clearAnimatedPolylines() {
+            animatedPolylines.forEach(p => map.removeLayer(p));
+            animatedPolylines = [];
+        }
+
+        function updateAnimatedSegmentsProgress(currentSegIdx, progress) {
+            for (let s = 0; s < currentSegIdx; s++) {
+                if (animatedPolylines[s]) {
+                    animatedPolylines[s].setLatLngs(getSegmentPath(s));
+                }
+            }
+            const segResult = getPositionAlongSegment(currentSegIdx, progress);
+            if (animatedPolylines[currentSegIdx]) {
+                animatedPolylines[currentSegIdx].setLatLngs(segResult.drawnCoords);
+            }
+            for (let s = currentSegIdx + 1; s < animatedPolylines.length; s++) {
+                animatedPolylines[s].setLatLngs([]);
+            }
+            return segResult.currentPos;
+        }
+
+        function getInterpolatedZoom(startZ, endZ, progress) {
+            const smoothT = progress < 0.5 ? 2 * progress * progress : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+            return startZ + (endZ - startZ) * smoothT;
+        }
+
+        async function waitForMapTilesToLoad(maxWaitMs = 1800) {
+            if (isCustomImageMode) return;
+            const startWait = performance.now();
+            await new Promise(r => setTimeout(r, 60));
+            while (pendingTilesCount > 0 && (performance.now() - startWait) < maxWaitMs) {
+                await new Promise(r => setTimeout(r, 50));
+            }
+        }
+
+        // 5. Pre-caricamento in Cache (per Mappe Online)
+        async function preCacheRoute() {
+            if (points.length < 2 || isAnimating || isCinemaMode || isRecordingGif || isCaching || isCustomImageMode) return;
+
+            resetAnimation();
+            isCaching = true;
+            updateUI();
+            renderEditOverlays();
+
+            const statusBox = document.getElementById('status-box');
+            statusBox.style.display = 'block';
+
+            const savedCenter = map.getCenter();
+            const savedZoom = map.getZoom();
+
+            try {
+                const stepsPerSegment = 10;
+                const totalSteps = (points.length - 1) * stepsPerSegment;
+                let currentStep = 0;
+
+                for (let seg = 0; seg < points.length - 1; seg++) {
+                    const startZ = (seg === 0) ? points[1].zoom : points[seg].zoom;
+                    const endZ = points[seg + 1].zoom;
+
+                    for (let s = 0; s <= stepsPerSegment; s++) {
+                        if (s > 0) currentStep++;
+                        const pct = Math.min(100, Math.round((currentStep / totalSteps) * 100));
+                        statusBox.innerText = `⚡ Pre-caricamento mappa in Cache (${pct}%)...`;
+
+                        const progress = s / stepsPerSegment;
+                        const { currentPos } = getPositionAlongSegment(seg, progress);
+                        const smoothZ = getInterpolatedZoom(startZ, endZ, progress);
+
+                        programmaticZoomChange = true;
+                        map.setView(currentPos, smoothZ, { animate: false });
+                        programmaticZoomChange = false;
+
+                        await waitForMapTilesToLoad(1500);
+                    }
+                }
+
+                statusBox.innerText = `✅ Percorso salvato in Cache!`;
+                await new Promise(r => setTimeout(r, 1000));
+
+            } finally {
+                programmaticZoomChange = true;
+                map.setView(savedCenter, savedZoom, { animate: false });
+                programmaticZoomChange = false;
+                statusBox.style.display = 'none';
+                isCaching = false;
+                updateUI();
+                renderEditOverlays();
+            }
+        }
+
+        // 6. Logica di Animazione (Play Standard & Play Cinema con Cut configurabili)
+        function startAnimation(cinema = false) {
+            if (points.length < 2 || isAnimating || isCinemaMode || isRecordingGif || isCaching) return;
+
+            resetAnimation();
+            isAnimating = true;
+            currentSegment = 0;
+
+            if (cinema) {
+                enterCinemaUI();
+            }
+
+            updateUI();
+            renderEditOverlays();
+            initAnimatedPolylines();
+
+            const startLatLng = points[0].latlng;
+            const firstSegmentZoom = points[1].zoom;
+
+            headMarker = L.circleMarker(startLatLng, {
+                radius: 7,
+                color: '#ffffff',
+                weight: 2,
+                fillColor: points[1].color,
+                fillOpacity: 1
+            }).addTo(map);
+
+            const follow = document.getElementById('follow-zoom').checked;
+
+            if (cinema) {
+                const { startMs } = getCutTimesMs();
+                if (follow) {
+                    programmaticZoomChange = true;
+                    map.setView(startLatLng, firstSegmentZoom, { animate: false });
+                    programmaticZoomChange = false;
+                    segmentStartZoom = firstSegmentZoom;
+                } else {
+                    segmentStartZoom = map.getZoom();
+                }
+
+                prePlayTimeoutId = setTimeout(() => {
+                    if (isAnimating) {
+                        segmentStartTime = performance.now();
+                        animationFrameId = requestAnimationFrame(animateStep);
+                    }
+                }, startMs);
+
+            } else {
+                if (follow) {
+                    programmaticZoomChange = true;
+                    map.flyTo(startLatLng, firstSegmentZoom, { animate: true, duration: 0.9 });
+                    prePlayTimeoutId = setTimeout(() => {
+                        programmaticZoomChange = false;
+                        if (isAnimating) {
+                            segmentStartZoom = firstSegmentZoom;
+                            segmentStartTime = performance.now();
+                            animationFrameId = requestAnimationFrame(animateStep);
+                        }
+                    }, 1000);
+                } else {
+                    segmentStartZoom = map.getZoom();
+                    segmentStartTime = performance.now();
+                    animationFrameId = requestAnimationFrame(animateStep);
+                }
+            }
+        }
+
+        function animateStep(timestamp) {
+            if (!isAnimating) return;
+
+            const destPt = points[currentSegment + 1];
+            const segmentDurationMs = destPt.duration * 1000;
+            const targetZoom = destPt.zoom;
+            const elapsed = timestamp - segmentStartTime;
+
+            let progress = elapsed / segmentDurationMs;
+            if (progress > 1) progress = 1;
+
+            const currentPos = updateAnimatedSegmentsProgress(currentSegment, progress);
+            headMarker.setLatLng(currentPos);
+            headMarker.setStyle({ fillColor: destPt.color });
+
+            const follow = document.getElementById('follow-zoom').checked;
+            if (follow) {
+                const smoothZoom = getInterpolatedZoom(segmentStartZoom, targetZoom, progress);
+                programmaticZoomChange = true;
+                map.setView(currentPos, smoothZoom, { animate: false });
+                programmaticZoomChange = false;
+            }
+
+            if (progress >= 1) {
+                segmentStartZoom = destPt.zoom;
+                currentSegment++;
+                segmentStartTime = timestamp;
+                highlightActiveSegmentInUI();
+                
+                if (currentSegment >= points.length - 1) {
+                    isAnimating = false;
+                    if (isCinemaMode) {
+                        const { endMs } = getCutTimesMs();
+                        postPlayTimeoutId = setTimeout(() => {
+                            exitCinemaUI();
+                            updateUI();
+                            syncAllMarkersAndComments();
+                        }, endMs);
+                    } else {
+                        updateUI();
+                        syncAllMarkersAndComments();
+                    }
+                    return;
+                }
+            }
+
+            animationFrameId = requestAnimationFrame(animateStep);
+        }
+
+        // 7. Esportazione in GIF Animata Fluida
+        async function exportToGif() {
+            if (points.length < 2 || isAnimating || isCinemaMode || isRecordingGif || isCaching) return;
+
+            validateFpsOnBlur();
+            resetAnimation();
+            isRecordingGif = true;
+            updateUI();
+            renderEditOverlays();
+            initAnimatedPolylines();
+
+            const statusBox = document.getElementById('status-box');
+            statusBox.style.display = 'block';
+            statusBox.innerText = '⏳ Inizializzazione motore GIF...';
+
+            try {
+                const workerResponse = await fetch('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js');
+                const workerText = await workerResponse.text();
+                const workerBlob = new Blob([workerText], { type: 'application/javascript' });
+                const workerUrl = URL.createObjectURL(workerBlob);
+
+                const mapElem = document.getElementById('map');
+                const captureScale = mapElem.offsetWidth > 1100 ? 0.65 : 0.8;
+                const width = Math.floor(mapElem.offsetWidth * captureScale);
+                const height = Math.floor(mapElem.offsetHeight * captureScale);
+
+                const gif = new GIF({
+                    workers: 4,
+                    quality: 10,
+                    workerScript: workerUrl,
+                    width: width,
+                    height: height
+                });
+
+                const startLatLng = points[0].latlng;
+                headMarker = L.circleMarker(startLatLng, {
+                    radius: 7,
+                    color: '#ffffff',
+                    weight: 2,
+                    fillColor: points[1].color,
+                    fillOpacity: 1
+                }).addTo(map);
+
+                const follow = document.getElementById('follow-zoom').checked;
+                if (follow) {
+                    programmaticZoomChange = true;
+                    map.setView(startLatLng, points[1].zoom, { animate: false });
+                    programmaticZoomChange = false;
+                }
+
+                await waitForMapTilesToLoad(2000);
+
+                const fps = Math.min(20, Math.max(1, currentFps || 15));
+                const frameDelayMs = Math.max(20, Math.round(1000 / fps));
+
+                let totalFrames = 0;
+                for (let i = 1; i < points.length; i++) {
+                    totalFrames += Math.max(2, Math.round(points[i].duration * fps));
+                }
+
+                let capturedFrames = 0;
+
+                for (let seg = 0; seg < points.length - 1; seg++) {
+                    const destPt = points[seg + 1];
+                    const segFrames = Math.max(2, Math.round(destPt.duration * fps));
+                    const startZ = (seg === 0) ? points[1].zoom : points[seg].zoom;
+                    const endZ = destPt.zoom;
+
+                    headMarker.setStyle({ fillColor: destPt.color });
+
+                    for (let f = 1; f <= segFrames; f++) {
+                        capturedFrames++;
+                        statusBox.innerText = `📸 Cattura fotogramma ${capturedFrames} di ${totalFrames} (${fps} FPS)...`;
+
+                        const progress = f / segFrames;
+                        const currentPos = updateAnimatedSegmentsProgress(seg, progress);
+                        headMarker.setLatLng(currentPos);
+
+                        if (follow) {
+                            const smoothZ = getInterpolatedZoom(startZ, endZ, progress);
+                            programmaticZoomChange = true;
+                            map.setView(currentPos, smoothZ, { animate: false });
+                            programmaticZoomChange = false;
+                            await waitForMapTilesToLoad(1500);
+                        } else {
+                            await new Promise(r => setTimeout(r, 20));
+                        }
+
+                        const canvas = await html2canvas(mapElem, {
+                            useCORS: true,
+                            allowTaint: false,
+                            scale: captureScale,
+                            logging: false
+                        });
+
+                        const isLastFrame = (seg === points.length - 2 && f === segFrames);
+                        gif.addFrame(canvas, { delay: isLastFrame ? 1500 : frameDelayMs, copy: true });
+                    }
+                }
+
+                statusBox.innerText = `⚙️ Assemblaggio GIF in corso (0%)...`;
+
+                gif.on('progress', function(p) {
+                    statusBox.innerText = `⚙️ Assemblaggio GIF in corso (${Math.round(p * 100)}%)...`;
+                });
+
+                gif.on('finished', function(blob) {
+                    statusBox.style.display = 'none';
+                    isRecordingGif = false;
+                    updateUI();
+                    renderEditOverlays();
+
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `viaggio_${fps}fps_${Date.now()}.gif`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(workerUrl);
+                });
+
+                gif.render();
+
+            } catch (error) {
+                console.error(error);
+                alert("Errore durante la creazione della GIF.");
+                statusBox.style.display = 'none';
+                isRecordingGif = false;
+                updateUI();
+                renderEditOverlays();
+            }
+        }
+
+        // 8. Funzioni di Reset e Cancellazione
+        function resetAnimation() {
+            if (isRecordingGif || isCaching) return;
+            isAnimating = false;
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            if (prePlayTimeoutId) clearTimeout(prePlayTimeoutId);
+            if (postPlayTimeoutId) clearTimeout(postPlayTimeoutId);
+            
+            exitCinemaUI();
+            clearAnimatedPolylines();
+            
+            if (headMarker) {
+                map.removeLayer(headMarker);
+                headMarker = null;
+            }
+            updateUI();
+            renderEditOverlays();
+        }
+
+        function clearAllPointsRaw() {
+            resetAnimation();
+            markers.forEach(m => map.removeLayer(m));
+            commentLabels.forEach(l => map.removeLayer(l));
+            markers = [];
+            commentLabels = [];
+            points = [];
+            renderEditOverlays();
+        }
+
+        function clearAll() {
+            if (isRecordingGif || isCaching) return;
+            clearAllPointsRaw();
+            updateUI();
+            
+            if (isCustomImageMode && customImageBounds) {
+                setRealSizeView();
+            } else {
+                map.flyTo([38.0, 15.0], 4, { duration: 1 });
+            }
+        }
+    </script>
+</body>
+</html>
